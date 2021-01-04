@@ -1,0 +1,133 @@
+#!/bin/sh
+# dependencies: mpv youtube-dl dmenu
+# optional: sxiv (for thumbnails)
+# search videos on youtube and play them in mpv, without an API 
+# usage:
+# yt					asks for input in stdin, prompts using dmenu
+#
+# Thanks to sayan01
+# Vouivre
+# Todo
+# Playlist support ?
+#   - in that goal remember the regexes
+#       - for video: '"videoRenderer":{"videoId":"\K.{11}".+?"text":".+?[^\\](?=")'
+#       - for playlist:'"playlistRenderer":{"playlistId":"\K.{34}?","title":{"simpleText":".+?[^\"](?=")'
+# Option to download best quality ?
+
+# Set Working directory
+WK_DIR="/tmp/yt"
+
+# Set variable DMENU if undefined
+DMENU=${DMENU:-dmenu -l 15}
+guicmd="$DMENU"
+
+# regex expression to match video and playlist entries from yt result page
+# grep the id and title
+# return them in format id (type) title
+
+get_results() {
+      echo $response | sed 's/"\}\],"accessibility"/\n/g' | grep -o '"videoRenderer":{"videoId":".\{11\}".*' | sed 's/"videoRenderer":{"videoId":"//g' |\
+		awk -F\" -v p="$2" '{ print $1 "\t" p " " $NF}'
+}
+
+get_video(){
+    id="$1"
+
+    # Download the file, play it and then delete it
+    youtube-dl -f best "$1" &
+
+    # Wait for the download to begin
+    sleep 1
+
+    file_downloaded=$(youtube-dl -f best --get-filename "$1")
+
+    # Play part which has already been downloaded
+    mpv "${file_downloaded%%.*}"*
+}
+
+get_thumb(){
+    id="$1"
+
+    # Download the thumbnail, display it and delete it
+    thumb_url=$(youtube-dl --get-thumbnail "$1");
+    filetype=${thumb_url##*.};
+    thumb_filename="thumb.$filetype"
+    
+    # Use "-O" parameter for wget to force download the file, becauses a lot of
+    # thumbnails have the same filename
+    wget -O "${thumb_filename}" "$thumb_url";
+    sxiv "${thumb_filename}";
+}
+
+viewvideo() {
+    # prompt the results to user infinitely until they exit (escape)
+    while true; do
+        choice=$(echo "$1" | cut -d'	' -f2 | $guicmd -p "Video": ) # don't show id
+    
+	    # if esc-ed then exit
+        if [ -z "$choice" ]; then exit; fi
+
+        # Store ";" if given by the user Get rid of ";" 
+        last_char=${choice: -1}
+
+        # Get rid of ";" if given 
+        if [ "$last_char" = ";" ]
+        then
+                choice=${choice:0:-1}
+        fi
+
+        id=$(echo "$videoids" | grep -F "${choice}" | cut -d'	' -f1) # get id of choice
+        printf "%s\t(%s)\n" "$choice" "$id"
+        case "$last_char" in
+            ';') get_thumb "$videolink$id";;
+            *) get_video "$videolink$id";;
+        esac
+   done
+}
+
+
+
+main(){
+    query=$(echo | $guicmd -p "Search: ")
+
+    # Check if the query is empty.
+    if [ -z "$query" ]; then exit; fi 
+
+    # sanitise the query
+    query=$(echo "$query" | sed \
+        -e 's|+|%2B|g'\
+        -e 's|#|%23|g'\
+        -e 's|&|%26|g'\
+        -e 's| |+|g')
+
+
+    # fetch the results with the $query and
+    # delete all escaped characters
+    response="$(curl -s "https://www.youtube.com/results?search_query=$query" |\
+        sed 's|\\.||g')"
+
+    # If unable to fetch the youtube results page, inform and exit
+    # Test exit status code of grep, stored in $?
+    echo "$response" | grep -q "script"
+    if [ $? -eq 1 ]
+    then
+        echo "unable to fetch yt"
+        exit 1
+    fi
+
+
+    # get the list of videos/playlists and their ids in videoids and playlistids
+    videoids=$(get_results)
+
+    # url prefix for videos and playlists
+    videolink="https://youtu.be/"
+
+    # Create the directory if it doesn't exists
+    if [ ! -d $WK_DIR ]; then mkdir $WK_DIR; fi
+    # Change to the working directory
+    cd $WK_DIR
+
+    viewvideo "$videoids"
+}
+
+main 
