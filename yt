@@ -124,8 +124,10 @@ main(){
 
     # Create the directory if it doesn't exists
     if [ ! -d $WK_DIR ]; then mkdir $WK_DIR; fi
+
     # Change to the working directory
-    cd $WK_DIR
+    # Exit the script if the cd fails
+    cd $WK_DIR || exit
 
     viewvideo "$videoids"
 }
