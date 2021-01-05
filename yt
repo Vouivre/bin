@@ -27,7 +27,7 @@ guicmd="$DMENU"
 
 get_results() {
       echo $response | sed 's/"\}\],"accessibility"/\n/g' | grep -o '"videoRenderer":{"videoId":".\{11\}".*' | sed 's/"videoRenderer":{"videoId":"//g' |\
-		awk -F\" -v p="$2" '{ print $1 "\t" p " " $NF}'
+		awk -F\" '{ print $1 "\t" $NF}'
 }
 
 get_video(){
