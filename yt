@@ -68,12 +68,12 @@ viewvideo() {
         if [ -z "$choice" ]; then exit; fi
 
         # Store ";" if given by the user Get rid of ";" 
-        last_char=${choice: -1}
+        last_char=${choice#${choice%?}}
 
         # Get rid of ";" if given 
         if [ "$last_char" = ";" ]
         then
-                choice=${choice:0:-1}
+                choice=${choice%$last_char}
         fi
 
         id=$(echo "$videoids" | grep -F "${choice}" | cut -d'	' -f1) # get id of choice
