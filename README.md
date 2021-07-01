@@ -1,2 +1,2 @@
 # bin
-Vouivre's script
+Vouivre's scripts
